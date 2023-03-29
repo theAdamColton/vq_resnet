@@ -1,7 +1,10 @@
 from lightning.pytorch.cli import LightningCLI
+import torch
 
 from vq_resnet.model import VQResnet
 from vq_resnet.imagenet_datamodule import ImagenetDataModule
+
+torch.set_float32_matmul_precision('medium')
 
 
 def cli_main():

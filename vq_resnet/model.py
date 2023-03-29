@@ -47,25 +47,40 @@ class VQResnet(pl.LightningModule):
         rq_class = quantizer.VectorQuantize if not is_rq else quantizer.ResidualVQ
 
 
-        self.in_layers = nn.ModuleList([
+        self.in_layers = nn.Sequential(
             self.resnet.conv1,
             self.resnet.bn1,
             self.resnet.relu,
             self.resnet.maxpool,
-        ])
+            )
 
-        self.resnet_layers = nn.ModuleList([
+        resnet_layers = [
                 self.resnet.layer1, 
                 self.resnet.layer2, 
                 self.resnet.layer3, 
                 self.resnet.layer4, 
-              ])
+          ]
 
-        quantizer_args["dim"] = list(list(self.resnet_layers[resnet_insertion_index-1].children())[-1].children())[-1].num_features
+        quantizer_args["dim"] = list(list(resnet_layers[resnet_insertion_index-1].children())[-1].children())[-1].num_features
         print("quant args", quantizer_args)
         self.quantizer = rq_class(**quantizer_args)
 
-        self.resnet_layers.insert(resnet_insertion_index, self.quantizer)
+        resnet_layers.insert(resnet_insertion_index, self.quantizer)
+        self.resnet_insertion_index = resnet_insertion_index
+        self.resnet_layers = nn.Sequential(*resnet_layers)
+
+        # Freezes the preceeding layers to quantizer
+        # only the layers following the quantizer will have grad
+        for il in self.in_layers:
+            il.requires_grad_(False)
+        for rl in list(self.resnet_layers.children())[:resnet_insertion_index]:
+            rl.requires_grad_(False)
+        for rl in list(self.resnet_layers.children())[resnet_insertion_index+1:]:
+            rl.requires_grad_(False)
+        self.resnet.avgpool.requires_grad_(False)
+        self.resnet.fc.requires_grad_(False)
+
+        self.resnet_layers
 
         self.loss_fn = nn.CrossEntropyLoss()
         self.acc = Accuracy("multiclass", num_classes=1000)
@@ -77,7 +92,7 @@ class VQResnet(pl.LightningModule):
         #torchinfo.summary(self, (7, 3, 224, 224))
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr=self.lr)
 
 
 
@@ -86,41 +101,49 @@ class VQResnet(pl.LightningModule):
         See: https://github.com/pytorch/vision/blob/0387b8821d67ca62d57e3b228ade45371c0af79d/torchvision/models/resnet.py#L166
         """
         x = self.in_layers(x)
-        x = self.resnet_layers(x)
+        q_loss = 0.0
+        i = -1
+        for rl in self.resnet_layers:
+            i += 1
+            if type(rl) == type(self.quantizer):
+                x, _, q_loss = rl(x)
+            else:
+                x = rl(x)
         x = self.resnet.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.resnet.fc(x)
-        return x
+        return x, q_loss
 
 
     
     def _step(self, batch):
         x, y = batch
-        preds = self(x)
+        preds, q_loss = self(x)
 
-        if self.num_classes == 1:
-            preds = preds.flatten()
-            y = y.float()
-
-        loss = self.loss_fn(preds, y)
+        classification_loss = self.loss_fn(preds, y)
         acc = self.acc(preds, y)
-        return loss, acc
+        return classification_loss, q_loss, acc
 
     def training_step(self, batch, batch_idx):
-        loss, acc = self._step(batch)
+        c_loss, q_loss, acc = self._step(batch)
         # perform logging
-        self.log(
-            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        self.log_dict(
+                {"t_c_loss":c_loss,
+                 "t_q_loss":q_loss,
+                 "t_acc": acc,
+                 }, on_step=True, on_epoch=True, prog_bar=True, logger=True
         )
-        self.log(
-            "train_acc", acc, on_step=True, on_epoch=True, prog_bar=True, logger=True
-        )
-        return loss
+        return c_loss + q_loss
 
 
-    def validation_step(self, batch, batch_idx):
-        loss, acc = self._step(batch)
+    def validation_step(self, batch, _):
+        c_loss, q_loss, acc = self._step(batch)
         # perform logging
-        self.log("val_loss", loss, on_epoch=True, prog_bar=False, logger=True)
-        self.log("val_acc", acc, on_epoch=True, prog_bar=True, logger=True)
+        self.log_dict(
+                {"v_c_loss":c_loss,
+                 "v_q_loss":q_loss,
+                 "v_acc": acc,
+                 }, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return c_loss + q_loss
 
