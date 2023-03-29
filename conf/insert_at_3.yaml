@@ -50,7 +50,7 @@ model:
   resnet_type: 34
   is_rq: true
   quantizer_args:
-    num_quantizers: 1
+    num_quantizers: 8
     shared_codebook: true
     quantize_dropout: true
     accept_image_fmap: true
@@ -58,10 +58,11 @@ model:
     codebook_size: 256
     decay: 0.8
     eps: 1.0e-05
-    commitment_weight: 0.0
+    commitment_weight: 100.0
     threshold_ema_dead_code: 0
+    sample_codebook_temp: 0.1
   resnet_insertion_index: 3
-  lr: 0.0001
+  lr: 0.0005
 data:
   data_dir: "/home/figes/Downloads/ILSVRC2012_CLS-LOC/"
   image_size: 224

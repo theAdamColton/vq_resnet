@@ -107,6 +107,7 @@ class VQResnet(pl.LightningModule):
             i += 1
             if type(rl) == type(self.quantizer):
                 x, _, q_loss = rl(x)
+                q_loss = q_loss.mean()
             else:
                 x = rl(x)
         x = self.resnet.avgpool(x)
@@ -143,7 +144,7 @@ class VQResnet(pl.LightningModule):
                 {"v_c_loss":c_loss,
                  "v_q_loss":q_loss,
                  "v_acc": acc,
-                 }, on_step=True, on_epoch=True, prog_bar=True, logger=True
+                 }, on_step=False, on_epoch=True, prog_bar=True, logger=True
         )
         return c_loss + q_loss
 

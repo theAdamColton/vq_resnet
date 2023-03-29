@@ -1,6 +1,7 @@
 """
 patched together from https://github.com/Lightning-AI/lightning-bolts/
 """
+import os
 import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
@@ -44,7 +45,8 @@ class ImagenetDataModule(LightningDataModule):
 
         self.image_size = image_size
         self.dims = (3, self.image_size, self.image_size)
-        self.data_dir = data_dir
+        self.train_data_dir = os.path.join(data_dir, "train/")
+        self.val_data_dir = os.path.join(data_dir, "val/")
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -65,7 +67,7 @@ class ImagenetDataModule(LightningDataModule):
         transforms = self.train_transform()
 
         dataset = ImageFolder(
-            self.data_dir,
+            self.train_data_dir,
             transform=transforms,
         )
         loader: DataLoader = DataLoader(
@@ -82,25 +84,8 @@ class ImagenetDataModule(LightningDataModule):
         transforms = self.val_transform()
 
         dataset = ImageFolder(
-            self.data_dir,
+            self.val_data_dir,
             transform=transforms,
-        )
-        loader: DataLoader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            drop_last=self.drop_last,
-            pin_memory=self.pin_memory,
-        )
-        return loader
-
-    def test_dataloader(self) -> DataLoader:
-        """Uses the validation split of imagenet2012 for testing."""
-        transforms = self.val_transform() 
-
-        dataset = ImageFolder(
-            self.data_dir, transform=transforms
         )
         loader: DataLoader = DataLoader(
             dataset,
