@@ -43,16 +43,27 @@ trainer:
 model:
   resnet_type: 34
   is_rq: true
-  quantizer_args: {}
+  quantizer_args:
+    num_quantizers: 1
+    shared_codebook: true
+    quantize_dropout: true
+    accept_image_fmap: true
+    codebook_dim: 128
+    codebook_size: 256
+    decay: 0.8
+    eps: 1.0e-05
+    commitment_weight: 0.0
+    threshold_ema_dead_code: 0
   resnet_insertion_index: 3
+  lr: 0.0001
 data:
-  data_dir: null
+  data_dir: "/home/figes/Downloads/ImageNet LSVRC 2012 Validation Set (Object Detection)/"
   meta_dir: null
   num_imgs_per_val_class: 50
   image_size: 224
-  num_workers: 0
-  batch_size: 32
+  num_workers: 8
+  batch_size: 8
   shuffle: true
   pin_memory: true
   drop_last: false
-ckpt_path: null
+ckpt_path: ckpt/test/

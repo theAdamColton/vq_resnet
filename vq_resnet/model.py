@@ -13,11 +13,23 @@ class VQResnet(pl.LightningModule):
     def __init__(self,
                  resnet_type:int=34,
                  is_rq=True,
-                 quantizer_args={},
+                 quantizer_args={
+                     "num_quantizers": 1,
+                     "shared_codebook": True,
+                     "quantize_dropout" : True,
+                     "accept_image_fmap" : True,
+                     "codebook_dim": 128,
+                     "codebook_size": 256,
+                     "decay": 0.8,
+                     "eps": 1e-5,
+                     "commitment_weight": 0.0,
+                     "threshold_ema_dead_code": 0,
+                     },
                  # After this block index of resnet quantizer layer will go
                  # All resnet models have 4 main layers. This param puts the
                  # vq layer after the ith layer
                  resnet_insertion_index=3,
+                 lr=1e-4
                  ):
         super().__init__()
 
@@ -34,13 +46,12 @@ class VQResnet(pl.LightningModule):
         self.is_rq = is_rq
         rq_class = quantizer.VectorQuantize if not is_rq else quantizer.ResidualVQ
 
-        self.quantizer = rq_class(**quantizer_args)
 
         self.in_layers = nn.ModuleList([
-            self.resenet.conv1,
-            self.resenet.bn1,
-            self.resenet.relu,
-            self.resenet.maxpool,
+            self.resnet.conv1,
+            self.resnet.bn1,
+            self.resnet.relu,
+            self.resnet.maxpool,
         ])
 
         self.resnet_layers = nn.ModuleList([
@@ -50,12 +61,24 @@ class VQResnet(pl.LightningModule):
                 self.resnet.layer4, 
               ])
 
+        quantizer_args["dim"] = list(list(self.resnet_layers[resnet_insertion_index-1].children())[-1].children())[-1].num_features
+        print("quant args", quantizer_args)
+        self.quantizer = rq_class(**quantizer_args)
+
         self.resnet_layers.insert(resnet_insertion_index, self.quantizer)
 
         self.loss_fn = nn.CrossEntropyLoss()
-        self.acc = Accuracy("multiclass", 1000)
+        self.acc = Accuracy("multiclass", num_classes=1000)
 
-        torchinfo.summary(self, (7, 3, 224, 224))
+        self.lr = lr
+
+        print(self.resnet_layers)
+
+        #torchinfo.summary(self, (7, 3, 224, 224))
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
+
 
 
     def forward(self, x):
