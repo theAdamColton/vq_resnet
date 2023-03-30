@@ -63,6 +63,8 @@ class VQResnet(pl.LightningModule):
           ]
 
         quantizer_args["dim"] = list(list(resnet_layers[resnet_insertion_index-1].children())[-1].children())[-1].num_features
+
+        self.post_q_norm = nn.BatchNorm2d(quantizer_args["dim"])
         #print("quant args", quantizer_args)
         self.quantizer = rq_class(**quantizer_args)
 
@@ -122,6 +124,7 @@ class VQResnet(pl.LightningModule):
         for rl in self.resnet_layers:
             if type(rl) == type(self.quantizer):
                 x, _, q_loss = rl(x)
+                x = self.post_q_norm(x)
                 q_loss = q_loss.mean()
             else:
                 x = rl(x)

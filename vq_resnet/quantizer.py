@@ -683,7 +683,11 @@ class ResidualVQ(nn.Module):
         self.num_quantizers = num_quantizers
 
         self.accept_image_fmap = accept_image_fmap
-        self.layers = nn.ModuleList([VectorQuantize(accept_image_fmap = accept_image_fmap, **kwargs) for _ in range(num_quantizers)])
+        if shared_codebook:
+            layer = VectorQuantize(accept_image_fmap = accept_image_fmap, **kwargs)
+            self.layers = nn.ModuleList([layer] * num_quantizers)
+        else:
+            self.layers = nn.ModuleList([VectorQuantize(accept_image_fmap = accept_image_fmap, **kwargs) for _ in range(num_quantizers)])
 
         self.quantize_dropout = quantize_dropout
 
@@ -692,14 +696,6 @@ class ResidualVQ(nn.Module):
         self.quantize_dropout_cutoff_index = quantize_dropout_cutoff_index
         self.quantize_dropout_multiple_of = quantize_dropout_multiple_of  # encodec paper proposes structured dropout, believe this was set to 4
 
-        if not shared_codebook:
-            return
-
-        first_vq, *rest_vq = self.layers
-        codebook = first_vq._codebook
-
-        for vq in rest_vq:
-            vq._codebook = codebook
 
     @property
     def codebooks(self):
@@ -811,7 +807,5 @@ class ResidualVQ(nn.Module):
             ret = (*ret, all_codes)
 
         return ret
-
-
 
 
