@@ -45,22 +45,22 @@ trainer:
   plugins: null
   sync_batchnorm: false
   reload_dataloaders_every_n_epochs: 0
-  default_root_dir: ckpt/test_insert_at_4
+  default_root_dir: ckpt/insert_at_4
 model:
   resnet_type: 34
   is_rq: true
   quantizer_args:
-    num_quantizers: 4
+    num_quantizers: 8
     shared_codebook: true
     quantize_dropout: false
     accept_image_fmap: true
     codebook_dim: 128
-    codebook_size: 256
+    codebook_size: 64
     decay: 0.8
     eps: 1.0e-05
     commitment_weight: 5.0
     threshold_ema_dead_code: 1
-    sample_codebook_temp: 0.0
+    sample_codebook_temp: 0.1
   resnet_insertion_index: 4
   unfreeze_resnet_block_indeces:
     - 3
@@ -69,7 +69,7 @@ model:
 data:
   data_dir: "/home/figes/Downloads/ILSVRC2012_CLS-LOC/"
   image_size: 224
-  num_workers: 8
+  num_workers: 6
   batch_size: 512
   shuffle: true
   pin_memory: true
