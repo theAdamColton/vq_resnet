@@ -63,7 +63,7 @@ class VQResnet(pl.LightningModule):
           ]
 
         quantizer_args["dim"] = list(list(resnet_layers[resnet_insertion_index-1].children())[-1].children())[-1].num_features
-        print("quant args", quantizer_args)
+        #print("quant args", quantizer_args)
         self.quantizer = rq_class(**quantizer_args)
 
         resnet_layers.insert(resnet_insertion_index, self.quantizer)
@@ -91,7 +91,7 @@ class VQResnet(pl.LightningModule):
 
         self.lr = lr
 
-        print(self.resnet_layers)
+        #print(self.resnet_layers)
 
         self.save_hyperparameters()
 
