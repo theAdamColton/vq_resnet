@@ -1,7 +1,6 @@
 import torch
 from torchmetrics import Accuracy
 import torch.nn as nn
-import torchinfo
 import torchvision.models as models
 import lightning as pl
 
@@ -94,7 +93,6 @@ class VQResnet(pl.LightningModule):
 
         print(self.resnet_layers)
 
-        #torchinfo.summary(self, (7, 3, 224, 224))
 
     def configure_optimizers(self):
         return torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr=self.lr)
