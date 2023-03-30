@@ -1,7 +1,6 @@
 import torch
 from torchmetrics import Accuracy
 import torch.nn as nn
-import torchvision
 import torchinfo
 import torchvision.models as models
 import lightning as pl
@@ -29,7 +28,10 @@ class VQResnet(pl.LightningModule):
                  # All resnet models have 4 main layers. This param puts the
                  # vq layer after the ith layer
                  resnet_insertion_index=3,
-                 lr=1e-4
+                 lr=1e-4,
+                 unfreeze_fc=False,
+                 unfreeze_resnet_block_indeces=[],
+
                  ):
         super().__init__()
 
@@ -77,8 +79,11 @@ class VQResnet(pl.LightningModule):
             rl.requires_grad_(False)
         for rl in list(self.resnet_layers.children())[resnet_insertion_index+1:]:
             rl.requires_grad_(False)
-        self.resnet.avgpool.requires_grad_(False)
-        self.resnet.fc.requires_grad_(False)
+        for unfreeze_idx in unfreeze_resnet_block_indeces:
+            list(self.resnet_layers.children())[unfreeze_idx].requires_grad_(True)
+        if not unfreeze_fc:
+            self.resnet.avgpool.requires_grad_(False)
+            self.resnet.fc.requires_grad_(False)
 
         self.resnet_layers
 
@@ -94,6 +99,18 @@ class VQResnet(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr=self.lr)
 
+    def encode(self, x, **kwargs):
+        """
+        kwargs : args for the particular vqlayer
+        returns the result of the vqlayer
+        """
+        x = self.in_layers(x)
+        for rl in self.resnet_layers:
+            if type(rl) == type(self.quantizer):
+                return rl(x, **kwargs)
+            else:
+                x = rl(x)
+        raise Exception("no quantizer in the resnet_layers!")
 
 
     def forward(self, x):
@@ -102,9 +119,7 @@ class VQResnet(pl.LightningModule):
         """
         x = self.in_layers(x)
         q_loss = 0.0
-        i = -1
         for rl in self.resnet_layers:
-            i += 1
             if type(rl) == type(self.quantizer):
                 x, _, q_loss = rl(x)
                 q_loss = q_loss.mean()
