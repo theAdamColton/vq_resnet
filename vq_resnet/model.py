@@ -93,6 +93,8 @@ class VQResnet(pl.LightningModule):
 
         print(self.resnet_layers)
 
+        self.save_hyperparameters()
+
 
     def configure_optimizers(self):
         return torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr=self.lr)
