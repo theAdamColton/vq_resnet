@@ -94,7 +94,6 @@ class VQResnet(pl.LightningModule):
         self.lr = lr
 
         #print(self.resnet_layers)
-
         self.save_hyperparameters()
 
 
