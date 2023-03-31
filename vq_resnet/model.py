@@ -89,7 +89,8 @@ class VQResnet(pl.LightningModule):
         self.resnet_layers
 
         self.loss_fn = nn.CrossEntropyLoss()
-        self.acc = Accuracy("multiclass", num_classes=1000)
+        self.acc1 = Accuracy("multiclass", num_classes=1000, top_k=1)
+        self.acc5 = Accuracy("multiclass", num_classes=1000, top_k=5)
 
         self.lr = lr
 
@@ -140,28 +141,30 @@ class VQResnet(pl.LightningModule):
         preds, q_loss = self(x)
 
         classification_loss = self.loss_fn(preds, y)
-        acc = self.acc(preds, y)
-        return classification_loss, q_loss, acc
+        acc1, acc5 = self.acc1(preds, y), self.acc5(preds, y)
+        return classification_loss, q_loss, acc1, acc5
 
     def training_step(self, batch, batch_idx):
-        c_loss, q_loss, acc = self._step(batch)
+        c_loss, q_loss, acc1, acc5 = self._step(batch)
         # perform logging
         self.log_dict(
                 {"t_c_loss":c_loss,
                  "t_q_loss":q_loss,
-                 "t_acc": acc,
+                 "t_acc_1": acc1,
+                 "t_acc_5": acc5,
                  }, on_step=True, on_epoch=True, prog_bar=True, logger=True
         )
         return c_loss + q_loss
 
 
     def validation_step(self, batch, _):
-        c_loss, q_loss, acc = self._step(batch)
+        c_loss, q_loss, acc_1, acc_5 = self._step(batch)
         # perform logging
         self.log_dict(
                 {"v_c_loss":c_loss,
                  "v_q_loss":q_loss,
-                 "v_acc": acc,
+                 "v_acc_1": acc_1,
+                 "v_acc_5": acc_5,
                  }, on_step=False, on_epoch=True, prog_bar=True, logger=True
         )
         return c_loss + q_loss
