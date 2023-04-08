@@ -26,11 +26,10 @@ class VQResnet(pl.LightningModule):
                  # After this block index of resnet quantizer layer will go
                  # All resnet models have 4 main layers. This param puts the
                  # vq layer after the ith layer
-                 resnet_insertion_index=3,
+                 resnet_insertion_index=4,
                  lr=1e-4,
                  unfreeze_fc=False,
                  unfreeze_resnet_block_indeces=[],
-
                  ):
         super().__init__()
 
@@ -64,9 +63,8 @@ class VQResnet(pl.LightningModule):
 
         quantizer_args["dim"] = list(list(resnet_layers[resnet_insertion_index-1].children())[-1].children())[-1].num_features
 
-        self.post_q_norm = nn.BatchNorm2d(quantizer_args["dim"])
-        #print("quant args", quantizer_args)
         self.quantizer = rq_class(**quantizer_args)
+        self.post_q_norm = nn.BatchNorm2d(quantizer_args["dim"])
 
         resnet_layers.insert(resnet_insertion_index, self.quantizer)
         self.resnet_insertion_index = resnet_insertion_index
@@ -85,6 +83,8 @@ class VQResnet(pl.LightningModule):
         if not unfreeze_fc:
             self.resnet.avgpool.requires_grad_(False)
             self.resnet.fc.requires_grad_(False)
+
+        self.frozen = len(unfreeze_resnet_block_indeces) == 0 and not unfreeze_fc
 
         self.resnet_layers
 
@@ -168,3 +168,18 @@ class VQResnet(pl.LightningModule):
         )
         return c_loss + q_loss
 
+
+    def save_frozen(self, filename: str):
+        if not self.frozen:
+            raise NotImplementedError()
+        with open(filename, "wb") as f:
+            torch.save({"quantizer": self.quantizer, "hparams": dict(self.hparams)}, f)
+
+    @staticmethod
+    def load_frozen(filename: str, device=torch.device("cpu")):
+        state_dict = torch.load(filename, map_location=device)
+        vqresnet = VQResnet(**state_dict["hparams"])
+        if not vqresnet.frozen:
+            raise NotImplementedError()
+        vqresnet.resnet_layers[vqresnet.resnet_insertion_index] = state_dict["quantizer"]
+        return vqresnet
