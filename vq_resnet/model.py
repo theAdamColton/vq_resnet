@@ -41,27 +41,37 @@ class VQResnet(pl.LightningModule):
             152: (models.resnet152, models.ResNet152_Weights.IMAGENET1K_V2),
         }
         _rm, _rw = resnets[resnet_type]
-        self.resnet = _rm(_rw)
+        resnet = _rm(_rw)
 
         self.is_rq = is_rq
         rq_class = quantizer.VectorQuantize if not is_rq else quantizer.ResidualVQ
 
 
         self.in_layers = nn.Sequential(
-            self.resnet.conv1,
-            self.resnet.bn1,
-            self.resnet.relu,
-            self.resnet.maxpool,
+            resnet.conv1,
+            resnet.bn1,
+            resnet.relu,
+            resnet.maxpool,
             )
 
         resnet_layers = [
-                self.resnet.layer1, 
-                self.resnet.layer2, 
-                self.resnet.layer3, 
-                self.resnet.layer4, 
+                resnet.layer1, 
+                resnet.layer2, 
+                resnet.layer3, 
+                resnet.layer4, 
           ]
 
-        quantizer_args["dim"] = list(list(resnet_layers[resnet_insertion_index-1].children())[-1].children())[-1].num_features
+
+        # Goes backwards through the sub-layers of the resnet layer that the vq layer
+        # will be inserted after.
+        # Looks for a BatchNorm2d layer that specifies the number of channels.
+        num_channels = -1
+        for resnet_layer in list(list(resnet_layers[resnet_insertion_index-1].children())[-1].children())[::-1]:
+            if type(resnet_layer) == nn.BatchNorm2d:
+                num_channels = resnet_layer.num_features
+                break
+
+        quantizer_args["dim"] = num_channels
 
         self.quantizer = rq_class(**quantizer_args)
         self.post_q_norm = nn.BatchNorm2d(quantizer_args["dim"])
@@ -69,6 +79,10 @@ class VQResnet(pl.LightningModule):
         resnet_layers.insert(resnet_insertion_index, self.quantizer)
         self.resnet_insertion_index = resnet_insertion_index
         self.resnet_layers = nn.Sequential(*resnet_layers)
+        self.post_resnet_layers = nn.Sequential(
+            resnet.avgpool,
+            torch.nn.Flatten(),
+            resnet.fc)
 
         # Freezes the preceeding layers to quantizer
         # only the layers following the quantizer will have grad
@@ -81,8 +95,10 @@ class VQResnet(pl.LightningModule):
         for unfreeze_idx in unfreeze_resnet_block_indeces:
             list(self.resnet_layers.children())[unfreeze_idx].requires_grad_(True)
         if not unfreeze_fc:
-            self.resnet.avgpool.requires_grad_(False)
-            self.resnet.fc.requires_grad_(False)
+            # avgpool
+            self.post_resnet_layers[0].requires_grad_(False)
+            # fc
+            self.post_resnet_layers[1].requires_grad_(False)
 
         self.frozen = len(unfreeze_resnet_block_indeces) == 0 and not unfreeze_fc
 
@@ -128,9 +144,7 @@ class VQResnet(pl.LightningModule):
                 q_loss = q_loss.mean()
             else:
                 x = rl(x)
-        x = self.resnet.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.resnet.fc(x)
+        x = self.post_resnet_layers(x)
         return x, q_loss
 
 
@@ -173,7 +187,7 @@ class VQResnet(pl.LightningModule):
         if not self.frozen:
             raise NotImplementedError()
         with open(filename, "wb") as f:
-            torch.save({"quantizer": self.quantizer, "hparams": dict(self.hparams)}, f)
+            torch.save({"quantizer": self.quantizer, "hparams": dict(self.hparams), "post_q_norm": self.post_q_norm}, f)
 
     @staticmethod
     def load_frozen(filename: str, device=torch.device("cpu")):
@@ -182,4 +196,5 @@ class VQResnet(pl.LightningModule):
         if not vqresnet.frozen:
             raise NotImplementedError()
         vqresnet.resnet_layers[vqresnet.resnet_insertion_index] = state_dict["quantizer"]
+        vqresnet.post_q_norm = state_dict["post_q_norm"]
         return vqresnet

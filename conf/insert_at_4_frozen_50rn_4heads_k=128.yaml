@@ -1,0 +1,73 @@
+# lightning.pytorch==2.0.0
+# bigger depth
+seed_everything: true
+trainer:
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        save_last: true
+        save_top_k: 1
+        monitor: v_c_loss
+  accelerator: auto
+  strategy: auto
+  devices: auto
+  num_nodes: 1
+  precision: 16-mixed
+  logger: null
+  fast_dev_run: false
+  max_epochs: 4
+  min_epochs: null
+  max_steps: -1
+  min_steps: null
+  max_time: null
+  limit_train_batches: null
+  limit_val_batches: null
+  limit_test_batches: null
+  limit_predict_batches: null
+  overfit_batches: 0.0
+  val_check_interval: 0.1
+  check_val_every_n_epoch: 1
+  num_sanity_val_steps: null
+  log_every_n_steps: 15
+  enable_checkpointing: true
+  enable_progress_bar: null
+  enable_model_summary: null
+  accumulate_grad_batches: 1
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: null
+  deterministic: null
+  benchmark: null
+  inference_mode: true
+  use_distributed_sampler: true
+  profiler: null
+  detect_anomaly: false
+  barebones: false
+  plugins: null
+  sync_batchnorm: false
+  reload_dataloaders_every_n_epochs: 0
+  default_root_dir: ckpt/insert_at_4_frozen_50rn_4heads_k=128
+model:
+  resnet_type: 50
+  is_rq: false
+  quantizer_args:
+    heads: 4
+    use_cosine_sim: false
+    accept_image_fmap: true
+    codebook_dim: 256
+    codebook_size: 128
+    decay: 0.95
+    eps: 1.0e-05
+    commitment_weight: 0.0
+    threshold_ema_dead_code: 0
+  resnet_insertion_index: 4
+  unfreeze_resnet_block_indeces: []
+  unfreeze_fc: false
+  lr: 0.0002
+data:
+  data_dir: "/home/figes/Downloads/ILSVRC2012_CLS-LOC/"
+  image_size: 224
+  num_workers: 6
+  batch_size: 512
+  shuffle: true
+  pin_memory: true
+  drop_last: false
